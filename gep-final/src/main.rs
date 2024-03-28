@@ -182,7 +182,7 @@ fn main() {
 impl Game {
     fn new(renderer: &mut Renderer, cache: &AssetCache) -> Self {
         let tile_handle = cache
-            .load::<Png>("tilemap")
+            .load::<Png>("texture")
             .expect("Couldn't load tilesheet img");
         let tile_img = tile_handle.read().0.to_rgba8();
         let tile_tex = renderer.create_array_texture(
