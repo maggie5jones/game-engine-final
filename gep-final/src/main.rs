@@ -26,6 +26,15 @@ pub struct TileData {
     sheet_region: SheetRegion,
 }
 
+#[derive(Clone, Debug)]
+struct Contact {
+    displacement: Vec2,
+    a_index: usize,
+    _a_rect: Rect,
+    b_index: usize,
+    b_rect: Rect,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 enum Dir {
@@ -428,49 +437,194 @@ impl Game {
         // implement collision detection here. 
         // for collision with the tilemap, you can use Level::tiles_within to find the tiles touching a rectangle, 
         // and filter out the ones that are not solid.  Then you have rects you can test against your player/enemies.
-        let player_rect = Rect {
-            x: self.player.pos.x,
-            y: self.player.pos.y,
+        // let player_rect = Rect {
+        //     x: self.player.pos.x,
+        //     y: self.player.pos.y,
+        //     w: TILE_SZ as u16,
+        //     h: TILE_SZ as u16,
+        // };
+
+        // Check for collision with enemies
+        // let enemy_rects = self
+        //     .enemies
+        //     .iter()
+        //     .filter(|enemy| enemy.1 > 0)
+        //     .map(|enemy| Rect {
+        //         x: enemy.0.pos.x,
+        //         y: enemy.0.pos.y,
+        //         w: TILE_SZ as u16,
+        //         h: TILE_SZ as u16,
+        //     })
+        //     .collect::<Vec<_>>();
+
+        let mut contacts = Vec::new();
+        let p_rect = Rect {
+            x: self.player.pos.x - (TILE_SZ / 2) as f32,
+            y: self.player.pos.y - (TILE_SZ / 2) as f32,
             w: TILE_SZ as u16,
             h: TILE_SZ as u16,
         };
+        let player = [p_rect, self.attack_area];
+        let enemy_rect: Vec<_> = self.enemies.iter().map(|e| make_rect(e.0.pos)).collect();
+        generate_contact(&player, &enemy_rect, &mut contacts);
+        // dbg!(contacts.len());
 
-        // Check for collision with enemies
-        let enemy_rects = self
-            .enemies
-            .iter()
-            .filter(|enemy| enemy.1 > 0)
-            .map(|enemy| Rect {
-                x: enemy.0.pos.x,
-                y: enemy.0.pos.y,
-                w: TILE_SZ as u16,
-                h: TILE_SZ as u16,
-            })
-            .collect::<Vec<_>>();
+        // Tile and Player contacts
+        let mut tile_contacts = Vec::new();
+        generate_tile_contact(&[player[0]], self.level(), &mut tile_contacts);
+        // dbg!(tile_contacts.len());
 
-        // check for collision with each enemy
-        for er in enemy_rects {
-            if player_rect.overlap(er) != None {
-                if self.knockback_timer <= 0.0 {
-                    self.health -= 1;                    
-                    if self.health == 0 {
-                        panic!("game over!"); // eventually add a game over state
-                    }
+        // Tile and Enemy contacts
+        let mut tile_enemy_contacts = Vec::new();
+        generate_tile_contact(&enemy_rect, self.level(), &mut tile_enemy_contacts);
+        // dbg!(tile_enemy_contacts.len());
+
+        // TODO POINT: damage/destroy the enemy
+
+        // I suggest gathering player-tile collisions and enemy-tile collisions, then doing collision response on those sets of contacts (it's OK to use two sets of contacts).
+        // You could have helper functions like gather_contacts_tiles(&[rect], &Level, &mut Vec<Contact>) and gather_contacts(&[rect], &[rect], &mut Vec<Contact>) or do_collision_response(&[Contact], &mut [rect], &[rect]) or compute_displacement(rect, rect) -> Vec2.
+        // A Contact struct is not strictly necessary but it's a good idea (with fields like displacement, a_index, a_rect, b_index, and b_rect fields).
+        // Then, you can check for contacts between the player & their attack rectangle on one side, and the enemies on the other side (you can reuse gather_contacts for this).  These don't need to participate in collision response, but you can use them to determine whether the player or enemy should be damaged.
+
+        // Contact Resolution for player vs. world
+        tile_contacts.sort_by(|a, b| {
+            b.displacement
+                .mag_sq()
+                .partial_cmp(&a.displacement.mag_sq())
+                .unwrap()
+        });
+        for contact in tile_contacts {
+            self.player.pos += find_displacement(p_rect, contact.b_rect);
+        }
+
+        // Contact Resolution for enemies vs. world
+        tile_enemy_contacts.sort_by(|a, b| {
+            b.displacement
+                .mag_sq()
+                .partial_cmp(&a.displacement.mag_sq())
+                .unwrap()
+        });
+        for contact in tile_enemy_contacts {
+            self.enemies[contact.a_index].0.pos +=
+                find_displacement(enemy_rect[contact.a_index], contact.b_rect);
+        }
+
+        // For deleting enemies, it's best to add the enemy to a "to_remove" vec, and then remove those enemies after this loop is all done.
+        contacts.sort_by(|a, b| {
+            b.displacement
+                .mag_sq()
+                .partial_cmp(&a.displacement.mag_sq())
+                .unwrap()
+        });
+        let mut removable = Vec::new();
+        for contact in contacts {
+            if contact.a_index == 1 {
+                self.enemies[contact.b_index].0.pos +=
+                    find_displacement(p_rect, enemy_rect[contact.b_index]);
+                removable.push(contact.b_index);
+            }
+            if contact.a_index == 0 {
+                if self.knockback_timer == 0.0 {
                     self.knockback_timer = KNOCKBACK_TIME;
+                    self.health -= 1;
+                    if self.health == 0 {
+                        panic!("Game Over!");
+                    }
+                } else if self.knockback_timer < KNOCKBACK_TIME {
+                    // "turn off" the ability to get hit
+                    if self.knockback_timer.abs() < 0.02 {
+                        self.knockback_timer = 0.0;
+                    }
                 }
             }
         }
+        // Alternatively, you could "disable" an enemy by giving it an `alive` flag or similar and setting that to false, not drawing or updating dead enemies.
+        for i in removable.iter().rev() {
+            self.enemies.swap_remove(*i);
+        }
+        // check for collision with each enemy
+        // for er in enemy_rects {
+        //     if player_rect.overlap(er) != None {
+        //         if self.knockback_timer <= 0.0 {
+        //             self.health -= 1;                    
+        //             if self.health == 0 {
+        //                 panic!("game over!"); // eventually add a game over state
+        //             }
+        //             self.knockback_timer = KNOCKBACK_TIME;
+        //         }
+        //     }
+        // }
         
-        // damage/destroy enemies
-        for enemy in self.enemies.iter_mut() {
-            if self.attack_area.overlap(Rect {
-                x: enemy.0.pos.x,
-                y: enemy.0.pos.y,
-                w: TILE_SZ as u16,
-                h: TILE_SZ as u16,
-            }) != None && enemy.1 > 0 {
-                enemy.1 -= 1;
+        // // damage/destroy enemies
+        // for enemy in self.enemies.iter_mut() {
+        //     if self.attack_area.overlap(Rect {
+        //         x: enemy.0.pos.x,
+        //         y: enemy.0.pos.y,
+        //         w: TILE_SZ as u16,
+        //         h: TILE_SZ as u16,
+        //     }) != None && enemy.1 > 0 {
+        //         enemy.1 -= 1;
+        //     }
+        // }
+    }
+}
+
+fn generate_contact(group_a: &[Rect], group_b: &[Rect], contacts: &mut Vec<Contact>) {
+    for (a_i, a_rect) in group_a.iter().enumerate() {
+        for (b_i, b_rect) in group_b.iter().enumerate() {
+            if let Some(overlap) = a_rect.overlap(*b_rect) {
+                contacts.push(Contact {
+                    displacement: overlap,
+                    a_index: a_i,
+                    _a_rect: *a_rect,
+                    b_index: b_i,
+                    b_rect: *b_rect,
+                });
             }
         }
+    }
+}
+
+fn generate_tile_contact(group_a: &[Rect], lvl: &Level, contacts: &mut Vec<Contact>) {
+    for (a_i, a_rect) in group_a.iter().enumerate() {
+        for (b_rect, _) in lvl.tiles_within(*a_rect).filter(|(_r, td)| td.solid) {
+            if let Some(overlap) = a_rect.overlap(b_rect) {
+                contacts.push(Contact {
+                    displacement: overlap,
+                    a_index: a_i,
+                    _a_rect: *a_rect,
+                    b_index: 0,
+                    b_rect,
+                });
+            }
+        }
+    }
+}
+
+fn find_displacement(a: Rect, b: Rect) -> Vec2 {
+    if let Some(mut overlap) = a.overlap(b) {
+        if overlap.x < overlap.y {
+            overlap.y = 0.0;
+        } else {
+            overlap.x = 0.0;
+        }
+        if a.x < b.x {
+            overlap.x *= -1.0;
+        }
+        if a.y < b.y {
+            overlap.y *= -1.0;
+        }
+        overlap
+    } else {
+        Vec2 { x: 0.0, y: 0.0 }
+    }
+}
+
+fn make_rect(position: Vec2) -> Rect {
+    Rect {
+        x: position.x - (TILE_SZ / 2) as f32,
+        y: position.y - (TILE_SZ / 2) as f32,
+        w: TILE_SZ as u16,
+        h: TILE_SZ as u16,
     }
 }
