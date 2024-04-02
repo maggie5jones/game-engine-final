@@ -93,7 +93,7 @@ struct Game {
 }
 
 // Feel free to change this if you use a different tilesheet
-const TILE_SZ: usize = 18;
+const TILE_SZ: usize = 16;
 const W: usize = 320;
 const H: usize = 240;
 
