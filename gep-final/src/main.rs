@@ -196,6 +196,12 @@ impl Game {
         let levels = vec![
             Level::from_str(
                 &cache
+                    .load::<String>("level3")
+                    .expect("Couldn't access level3.txt")
+                    .read(),
+            ),
+            Level::from_str(
+                &cache
                     .load::<String>("level1")
                     .expect("Couldn't access level1.txt")
                     .read(),
