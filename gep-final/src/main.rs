@@ -82,6 +82,7 @@ struct Pos {
     dir: Dir,
 }
 struct Game {
+    camera: Camera2D,
     current_level: usize,
     levels: Vec<Level>,
     enemies: Vec<(Pos, usize)>,
@@ -94,8 +95,9 @@ struct Game {
 
 // Feel free to change this if you use a different tilesheet
 const TILE_SZ: usize = 16;
-const W: usize = 320;
-const H: usize = 240;
+const W: usize = 220; // 320
+const H: usize = 140; // 240
+const SCREEN_FAST_MARGIN: f32 = 64.0;
 
 // pixels per second
 const PLAYER_SPEED: f32 = 64.0;
@@ -225,6 +227,7 @@ impl Game {
             .map(|(_, ploc)| ploc)
             .expect("Start level doesn't put the player anywhere");
         let mut game = Game {
+            camera,
             current_level,
             attack_area: Rect {
                 x: 0.0,
@@ -269,6 +272,7 @@ impl Game {
     fn render(&mut self, frend: &mut Renderer) {
         // make this exactly as big as we need
         frend.sprite_group_resize(0, self.sprite_count());
+        frend.sprite_group_set_camera(0, self.camera);
 
         let sprites_used = self.level().render_into(frend, 0);
         let (sprite_posns, sprite_gfx) = frend.sprites_mut(0, sprites_used..);
@@ -433,6 +437,30 @@ impl Game {
                 enemy.0.pos = enemy_dest;
             }
         }
+
+        let lw = self.level().width();
+        let lh = self.level().height();
+
+        while self.player.pos.x
+            > self.camera.screen_pos[0] + self.camera.screen_size[0] - SCREEN_FAST_MARGIN
+        {
+            self.camera.screen_pos[0] += 1.0;
+        }
+        while self.player.pos.x < self.camera.screen_pos[0] + SCREEN_FAST_MARGIN {
+            self.camera.screen_pos[0] -= 1.0;
+        }
+        while self.player.pos.y
+            > self.camera.screen_pos[1] + self.camera.screen_size[1] - SCREEN_FAST_MARGIN
+        {
+            self.camera.screen_pos[1] += 1.0;
+        }
+        while self.player.pos.y < self.camera.screen_pos[1] + SCREEN_FAST_MARGIN {
+            self.camera.screen_pos[1] -= 1.0;
+        }
+        self.camera.screen_pos[0] =
+            self.camera.screen_pos[0].clamp(0.0, (lw * TILE_SZ).max(W) as f32 - W as f32);
+        self.camera.screen_pos[1] =
+            self.camera.screen_pos[1].clamp(0.0, (lh * TILE_SZ).max(H) as f32 - H as f32);
 
         // implement collision detection here. 
         // for collision with the tilemap, you can use Level::tiles_within to find the tiles touching a rectangle, 
