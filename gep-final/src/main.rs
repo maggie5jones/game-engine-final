@@ -273,7 +273,7 @@ impl Game {
     }
     fn sprite_count(&self) -> usize {
         //todo!("count how many entities and other sprites we have");
-        self.level().sprite_count() + self.enemies.len() + 1 + 1 + 3 //+ player + sword + hearts
+        self.level().sprite_count() + self.enemies.len() + 1 + 1 + self.health as usize //+ player + sword + hearts
     }
     fn render(&mut self, frend: &mut Renderer) {
         // make this exactly as big as we need
