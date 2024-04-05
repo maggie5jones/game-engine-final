@@ -276,6 +276,21 @@ impl Game {
         self.level().sprite_count() + self.enemies.len() + 1 + 1 + self.health as usize //+ player + sword + hearts
     }
     fn render(&mut self, frend: &mut Renderer) {
+        let mut rng = rand::thread_rng();
+        let rand = rng.gen_range(0..1000);
+        if rand > 960 {
+            let mut randx = rng.gen_range(2..self.levels[self.current_level].width()*TILE_SZ);
+            let mut randy = rng.gen_range(2..self.levels[self.current_level].height()*TILE_SZ);
+            while ((randx as f32 - self.player.pos.x).abs() < 10.0) && ((randy as f32 - self.player.pos.y).abs() < 10.0) {
+                randx = rng.gen_range(2..self.levels[self.current_level].width()*TILE_SZ);
+                randy = rng.gen_range(2..self.levels[self.current_level].height()*TILE_SZ);
+            } 
+            let monster = Pos {
+                pos: Vec2{x: randx as f32, y: randy as f32},
+                dir: Dir::S,
+            };
+            self.enemies.push((monster, 1));
+        }
         // make this exactly as big as we need
         frend.sprite_group_resize(0, self.sprite_count());
         frend.sprite_group_set_camera(0, self.camera);
@@ -391,26 +406,26 @@ impl Game {
                 Dir::N => Rect {
                     x: self.player.pos.x,
                     y: self.player.pos.y + TILE_SZ as f32,
-                    w: TILE_SZ as u16,
-                    h: 16,
+                    w: 2*TILE_SZ as u16,
+                    h: 32,
                 },
                 Dir::E => Rect {
                     x: self.player.pos.x + TILE_SZ as f32,
                     y: self.player.pos.y,
-                    w: 16,
-                    h: TILE_SZ as u16,
+                    w: 32,
+                    h: 2*TILE_SZ as u16,
                 },
                 Dir::S => Rect {
                     x: self.player.pos.x,
                     y: self.player.pos.y - 16.0,
-                    w: TILE_SZ as u16,
-                    h: 16,
+                    w: 2*TILE_SZ as u16,
+                    h: 32,
                 },
                 Dir::W => Rect {
                     x: self.player.pos.x - 16.0,
                     y: self.player.pos.y,
-                    w: 16,
-                    h: TILE_SZ as u16,
+                    w: 32,
+                    h: 2*TILE_SZ as u16,
                 },
             };
         } else if self.attack_timer <= ATTACK_COOLDOWN_TIME {
@@ -439,7 +454,8 @@ impl Game {
                 };
             }
             let enemy_dest = enemy.0.pos + (enemy.0.dir.to_vec2() * ENEMY_SPEED * dt);
-            if (enemy_dest.x >= 0.0 && enemy_dest.x <= W as f32) && (enemy_dest.y > 0.0 && enemy_dest.y <= H as f32) {
+            if (enemy_dest.x >= 0.0 && enemy_dest.x <= (self.levels[self.current_level].width()*TILE_SZ) as f32)
+             && (enemy_dest.y > 0.0 && enemy_dest.y <= (self.levels[self.current_level].height()*TILE_SZ) as f32) {
                 enemy.0.pos = enemy_dest;
             }
         }
