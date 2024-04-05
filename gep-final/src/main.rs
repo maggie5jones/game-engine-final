@@ -277,7 +277,7 @@ impl Game {
         //todo!("count how many entities and other sprites we have");
         self.level().sprite_count() + self.enemies.len() + 1 + 1 + self.health as usize //+ player + sword + hearts
     }
-    fn render(&mut self, frend: &mut Renderer) {
+    fn spawn_enemies(&mut self) {
         let mut rng = rand::thread_rng();
         let rand = rng.gen_range(0..1000);
         if rand > 960 {
@@ -294,6 +294,8 @@ impl Game {
             };
             self.enemies.push((monster, 1));
         }
+    }
+    fn render(&mut self, frend: &mut Renderer) {
         // make this exactly as big as we need
         frend.sprite_group_resize(0, self.sprite_count());
         frend.sprite_group_set_camera(0, self.camera);
@@ -369,9 +371,11 @@ impl Game {
         if input.is_key_pressed(Key::Escape) {
             self.paused = !self.paused;
         }
-        if self.paused{
+        if self.paused {
             self.simulate_pause(input, dt);
+            return;
         }
+        self.spawn_enemies();
         if self.attack_timer > 0.0 {
             self.attack_timer -= dt;
         }
@@ -604,15 +608,9 @@ impl Game {
         for i in removable.iter().rev() {
             self.enemies.swap_remove(*i);
         }
-        
     }
-    fn simulate_pause(&mut self, input: &Input, dt: f32) {
-        if input.is_key_pressed(Key::Escape) {
-            self.paused = !self.paused;
-        }
-        if !self.paused{
-            self.simulate(input, dt);
-        }
+    fn simulate_pause(&mut self, _input: &Input, _dt: f32) {
+        return;
     }
     
 }
