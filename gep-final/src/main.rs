@@ -91,6 +91,7 @@ struct Game {
     attack_timer: f32,
     knockback_timer: f32,
     health: u8,
+    paused: bool,
 }
 
 // Feel free to change this if you use a different tilesheet
@@ -250,6 +251,7 @@ impl Game {
                 pos: player_start,
                 dir: Dir::S,
             },
+            paused: false,
         };
         game.enter_level(player_start);
         game
@@ -281,7 +283,8 @@ impl Game {
         if rand > 960 {
             let mut randx = rng.gen_range(2..self.levels[self.current_level].width()*TILE_SZ);
             let mut randy = rng.gen_range(2..self.levels[self.current_level].height()*TILE_SZ);
-            while ((randx as f32 - self.player.pos.x).abs() < 10.0) && ((randy as f32 - self.player.pos.y).abs() < 10.0) {
+            while ((randx as f32 - self.player.pos.x).abs() < 10.0) && ((randy as f32 - self.player.pos.y).abs() < 10.0)
+            && self.level().get_tile_at(Vec2{x:randx as f32, y:randy as f32}).unwrap().solid == false  {
                 randx = rng.gen_range(2..self.levels[self.current_level].width()*TILE_SZ);
                 randy = rng.gen_range(2..self.levels[self.current_level].height()*TILE_SZ);
             } 
@@ -363,6 +366,9 @@ impl Game {
         }
     }
     fn simulate(&mut self, input: &Input, dt: f32) {
+        if self.paused{
+            self.simulate_pause(input, dt);
+        }
         if self.attack_timer > 0.0 {
             self.attack_timer -= dt;
         }
@@ -455,7 +461,8 @@ impl Game {
             }
             let enemy_dest = enemy.0.pos + (enemy.0.dir.to_vec2() * ENEMY_SPEED * dt);
             if (enemy_dest.x >= 0.0 && enemy_dest.x <= (self.levels[self.current_level].width()*TILE_SZ) as f32)
-             && (enemy_dest.y > 0.0 && enemy_dest.y <= (self.levels[self.current_level].height()*TILE_SZ) as f32) {
+             && (enemy_dest.y > 0.0 && enemy_dest.y <= (self.levels[self.current_level].height()*TILE_SZ) as f32) 
+            {
                 enemy.0.pos = enemy_dest;
             }
         }
@@ -511,8 +518,8 @@ impl Game {
         let p_rect = Rect {
             x: self.player.pos.x - (TILE_SZ / 2) as f32,
             y: self.player.pos.y - (TILE_SZ / 2) as f32,
-            w: TILE_SZ as u16,
-            h: TILE_SZ as u16,
+            w: (TILE_SZ/2) as u16,
+            h: (TILE_SZ/2) as u16,
         };
         let player = [p_rect, self.attack_area];
         let enemy_rect: Vec<_> = self.enemies.iter().map(|e| make_rect(e.0.pos)).collect();
@@ -566,9 +573,10 @@ impl Game {
                 .partial_cmp(&a.displacement.mag_sq())
                 .unwrap()
         });
+
         let mut removable = Vec::new();
         for contact in contacts {
-            if contact.a_index == 1 {
+            if contact.a_index == 1 && !removable.contains(&contact.b_index){
                 self.enemies[contact.b_index].0.pos +=
                     find_displacement(p_rect, enemy_rect[contact.b_index]);
                 removable.push(contact.b_index);
@@ -589,34 +597,16 @@ impl Game {
             }
         }
         // Alternatively, you could "disable" an enemy by giving it an `alive` flag or similar and setting that to false, not drawing or updating dead enemies.
+        removable.sort();
         for i in removable.iter().rev() {
             self.enemies.swap_remove(*i);
         }
-        // check for collision with each enemy
-        // for er in enemy_rects {
-        //     if player_rect.overlap(er) != None {
-        //         if self.knockback_timer <= 0.0 {
-        //             self.health -= 1;                    
-        //             if self.health == 0 {
-        //                 panic!("game over!"); // eventually add a game over state
-        //             }
-        //             self.knockback_timer = KNOCKBACK_TIME;
-        //         }
-        //     }
-        // }
         
-        // // damage/destroy enemies
-        // for enemy in self.enemies.iter_mut() {
-        //     if self.attack_area.overlap(Rect {
-        //         x: enemy.0.pos.x,
-        //         y: enemy.0.pos.y,
-        //         w: TILE_SZ as u16,
-        //         h: TILE_SZ as u16,
-        //     }) != None && enemy.1 > 0 {
-        //         enemy.1 -= 1;
-        //     }
-        // }
     }
+    fn simulate_pause(&mut self, input: &Input, dt: f32) {
+        
+    }
+    
 }
 
 fn generate_contact(group_a: &[Rect], group_b: &[Rect], contacts: &mut Vec<Contact>) {
