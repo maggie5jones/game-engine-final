@@ -366,6 +366,9 @@ impl Game {
         }
     }
     fn simulate(&mut self, input: &Input, dt: f32) {
+        if input.is_key_pressed(Key::Escape) {
+            self.paused = !self.paused;
+        }
         if self.paused{
             self.simulate_pause(input, dt);
         }
@@ -604,7 +607,12 @@ impl Game {
         
     }
     fn simulate_pause(&mut self, input: &Input, dt: f32) {
-        
+        if input.is_key_pressed(Key::Escape) {
+            self.paused = !self.paused;
+        }
+        if !self.paused{
+            self.simulate(input, dt);
+        }
     }
     
 }
