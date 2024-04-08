@@ -64,6 +64,8 @@ const ENEMY: [SheetRegion; 4] = [
     SheetRegion::rect(533 + 16 * 3, 39, 16, 16),
 ];
 
+const MENU: SheetRegion = SheetRegion::rect(456, 439, 16, 16);
+
 const HEART: SheetRegion = SheetRegion::rect(525, 35, 8, 8);
 
 impl Dir {
@@ -221,6 +223,7 @@ impl Game {
         };
         let sprite_estimate =
             levels[current_level].sprite_count() + levels[current_level].starts().len();
+        // tile sprite group
         renderer.sprite_group_add(
             &tile_tex,
             vec![Transform::ZERO; sprite_estimate],
@@ -275,9 +278,13 @@ impl Game {
     }
     fn sprite_count(&self) -> usize {
         //todo!("count how many entities and other sprites we have");
-        self.level().sprite_count() + self.enemies.len() + 1 + 1 + self.health as usize //+ player + sword + hearts
+        self.level().sprite_count() + self.enemies.len() + 1 + 1 + self.health as usize + 8 // enemies+ player + sword + hearts + menu
     }
     fn spawn_enemies(&mut self) {
+        if self.paused {
+            return;
+        }
+
         let mut rng = rand::thread_rng();
         let rand = rng.gen_range(0..1000);
         if rand > 960 {
@@ -295,12 +302,37 @@ impl Game {
             self.enemies.push((monster, 1));
         }
     }
+    fn draw_hud(&self, frend: &mut Renderer) {
+        // this is wrong lol
+        let sprites_used = self.level().render_into(frend, 0) + 4;
+        let (sprite_posns, sprite_gfx) = frend.sprites_mut(0, sprites_used..);
+        
+        // render a pause menu
+        if self.paused {
+            let heart_pos = Transform {
+                w: (TILE_SZ) as u16, 
+                h: (TILE_SZ) as u16,
+                x: 10 as f32,
+                y: 10 as f32, 
+                rot: 0.0,
+            };
+            for i in 0..10 {
+                let j = i as usize + 3 + self.health as usize;
+                sprite_posns[j] = Transform {
+                    x: heart_pos.x + i as f32 * (TILE_SZ) as f32,
+                    ..heart_pos
+                };
+                sprite_gfx[j] = HEART.with_depth(0);
+            }
+        }
+    }
     fn render(&mut self, frend: &mut Renderer) {
+        self.draw_hud(frend);
         // make this exactly as big as we need
         frend.sprite_group_resize(0, self.sprite_count());
         frend.sprite_group_set_camera(0, self.camera);
 
-        let sprites_used = self.level().render_into(frend, 0);
+        let sprites_used = self.level().render_into(frend, 0) + 8;
         let (sprite_posns, sprite_gfx) = frend.sprites_mut(0, sprites_used..);
 
         for (enemy, (trf, uv)) in self
@@ -368,6 +400,8 @@ impl Game {
         }
     }
     fn simulate(&mut self, input: &Input, dt: f32) {
+        self.spawn_enemies();
+        
         if input.is_key_pressed(Key::Escape) {
             self.paused = !self.paused;
         }
@@ -375,7 +409,6 @@ impl Game {
             self.simulate_pause(input, dt);
             return;
         }
-        self.spawn_enemies();
         if self.attack_timer > 0.0 {
             self.attack_timer -= dt;
         }
@@ -611,6 +644,7 @@ impl Game {
     }
     fn simulate_pause(&mut self, _input: &Input, _dt: f32) {
         return;
+        // probably more to add here in the future to simulate clicking menu buttons
     }
     
 }
