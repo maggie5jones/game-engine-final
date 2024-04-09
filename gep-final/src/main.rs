@@ -65,6 +65,8 @@ const ENEMY: [SheetRegion; 4] = [
 ];
 
 const HEART: SheetRegion = SheetRegion::rect(525, 35, 8, 8);
+const ATK: SheetRegion = SheetRegion::rect(525, 19, 8, 8);
+const BLANK: SheetRegion = SheetRegion::rect(600, 600, 16, 16);
 
 impl Dir {
     fn to_vec2(self) -> Vec2 {
@@ -88,6 +90,7 @@ struct Game {
     enemies: Vec<(Pos, usize)>,
     player: Pos,
     attack_area: Rect,
+    attack_range: f32,
     attack_timer: f32,
     knockback_timer: f32,
     health: u8,
@@ -107,7 +110,7 @@ const KNOCKBACK_SPEED: f32 = 128.0;
 
 const ATTACK_MAX_TIME: f32 = 0.3;
 const ATTACK_COOLDOWN_TIME: f32 = 0.1;
-const KNOCKBACK_TIME: f32 = 0.25;
+const KNOCKBACK_TIME: f32 = 1.0;
 
 const DT: f32 = 1.0 / 60.0;
 
@@ -244,6 +247,7 @@ impl Game {
             },
             knockback_timer: 0.0,
             attack_timer: 0.0,
+            attack_range: 3.0,
             levels,
             health: 3,
             enemies: vec![],
@@ -275,7 +279,7 @@ impl Game {
     }
     fn sprite_count(&self) -> usize {
         //todo!("count how many entities and other sprites we have");
-        self.level().sprite_count() + self.enemies.len() + 1 + 1 + self.health as usize //+ player + sword + hearts
+        self.level().sprite_count() + self.enemies.len() + 1 + 1 + 1 + self.health as usize //+ player + sword + atk circle + hearts
     }
     fn render(&mut self, frend: &mut Renderer) {
         let mut rng = rand::thread_rng();
@@ -283,7 +287,7 @@ impl Game {
         if rand > 960 {
             let mut randx = rng.gen_range(2..self.levels[self.current_level].width()*TILE_SZ);
             let mut randy = rng.gen_range(2..self.levels[self.current_level].height()*TILE_SZ);
-            while ((randx as f32 - self.player.pos.x).abs() < 10.0) && ((randy as f32 - self.player.pos.y).abs() < 10.0)
+            while ((randx as f32 - self.player.pos.x).abs() < 48.0) && ((randy as f32 - self.player.pos.y).abs() < 48.0)
             && self.level().get_tile_at(Vec2{x:randx as f32, y:randy as f32}).unwrap().solid == false  {
                 randx = rng.gen_range(2..self.levels[self.current_level].width()*TILE_SZ);
                 randy = rng.gen_range(2..self.levels[self.current_level].height()*TILE_SZ);
@@ -330,7 +334,11 @@ impl Game {
             y: self.player.pos.y,
             rot: 0.0,
         };
-        sprite_gfx[0] = PLAYER[self.player.dir as usize].with_depth(1);
+        if self.knockback_timer > 0.0 && self.knockback_timer % 0.5 < 0.25 {
+            sprite_gfx[0] = BLANK.with_depth(1);
+        } else{
+            sprite_gfx[0] = PLAYER[self.player.dir as usize].with_depth(1);
+        }
         if self.attack_area.is_empty() {
             sprite_posns[1] = Transform::ZERO;
         } else {
@@ -346,29 +354,34 @@ impl Game {
                 y: self.player.pos.y + delta.y,
                 rot: 0.0,
             };
+            sprite_posns[self.health as usize + 2] = Transform {
+                w: (self.attack_range as usize * TILE_SZ) as u16,
+                h: (self.attack_range as usize * TILE_SZ) as u16,
+                x: self.player.pos.x,
+                y: self.player.pos.y,
+                rot: 0.0,
+            }
         }
-        sprite_gfx[1] = PLAYER_ATK[self.player.dir as usize].with_depth(0);
+        sprite_gfx[1] = BLANK.with_depth(0); //was player_atk[dir]
+        sprite_gfx[self.health as usize + 2] = ATK.with_depth(0);
         // done point: draw hearts
         let heart_pos = Transform {
             w: (TILE_SZ/2) as u16, 
             h: (TILE_SZ/2) as u16,
-            x: self.player.pos.x - (TILE_SZ/2 - 2) as f32,
+            x: self.player.pos.x - (TILE_SZ/2) as f32,
             y: self.player.pos.y + TILE_SZ as f32, 
             rot: 0.0,
         };
         for i in 0..self.health {
             let j = i as usize + 2;
             sprite_posns[j] = Transform {
-                x: heart_pos.x + i as f32 * (TILE_SZ/2) as f32,
+                x: heart_pos.x + i as f32 * (TILE_SZ/2) as f32 - 0.5,
                 ..heart_pos
             };
             sprite_gfx[j] = HEART.with_depth(0);
         }
     }
     fn simulate(&mut self, input: &Input, dt: f32) {
-        if self.paused{
-            self.simulate_pause(input, dt);
-        }
         if self.attack_timer > 0.0 {
             self.attack_timer -= dt;
         }
@@ -382,13 +395,10 @@ impl Game {
         let knockback = self.knockback_timer > 0.0;
         if attacking {
             // while attacking we can't move
-            dx = 0.0;
-            dy = 0.0;
+            // dx = 0.0;
+            // dy = 0.0;
         } else if knockback {
-            // during knockback we move but don't turn around
-            let delta = self.player.dir.to_vec2();
-            dx = -delta.x * KNOCKBACK_SPEED * dt;
-            dy = -delta.y * KNOCKBACK_SPEED * dt;
+
         } else {
             // not attacking, no knockback, do normal movement
             if dx > 0.0 {
@@ -408,32 +418,12 @@ impl Game {
             // compute the attack area's center based on the player's position and facing and some offset
             // For the spritesheet provided, the attack is placed 8px "forwards" from the player.
             self.attack_timer = ATTACK_MAX_TIME;
-            self.attack_area = match self.player.dir {
-                Dir::N => Rect {
-                    x: self.player.pos.x,
-                    y: self.player.pos.y + TILE_SZ as f32,
-                    w: 2*TILE_SZ as u16,
-                    h: 32,
-                },
-                Dir::E => Rect {
-                    x: self.player.pos.x + TILE_SZ as f32,
-                    y: self.player.pos.y,
-                    w: 32,
-                    h: 2*TILE_SZ as u16,
-                },
-                Dir::S => Rect {
-                    x: self.player.pos.x,
-                    y: self.player.pos.y - 16.0,
-                    w: 2*TILE_SZ as u16,
-                    h: 32,
-                },
-                Dir::W => Rect {
-                    x: self.player.pos.x - 16.0,
-                    y: self.player.pos.y,
-                    w: 32,
-                    h: 2*TILE_SZ as u16,
-                },
-            };
+            self.attack_area = Rect {
+                x: self.player.pos.x - (TILE_SZ as f32*(self.attack_range/2.0)),
+                y: self.player.pos.y - (TILE_SZ as f32*(self.attack_range/2.0)),
+                w: self.attack_range as u16 *TILE_SZ as u16,
+                h: self.attack_range as u16 *TILE_SZ as u16,
+            }
         } else if self.attack_timer <= ATTACK_COOLDOWN_TIME {
             // "turn off" the attack, but the cooldown is still going
             self.attack_area = Rect {
@@ -518,8 +508,8 @@ impl Game {
         let p_rect = Rect {
             x: self.player.pos.x - (TILE_SZ / 2) as f32,
             y: self.player.pos.y - (TILE_SZ / 2) as f32,
-            w: (TILE_SZ/2) as u16,
-            h: (TILE_SZ/2) as u16,
+            w: (TILE_SZ) as u16,
+            h: (TILE_SZ) as u16,
         };
         let player = [p_rect, self.attack_area];
         let enemy_rect: Vec<_> = self.enemies.iter().map(|e| make_rect(e.0.pos)).collect();
@@ -603,10 +593,6 @@ impl Game {
         }
         
     }
-    fn simulate_pause(&mut self, input: &Input, dt: f32) {
-        
-    }
-    
 }
 
 fn generate_contact(group_a: &[Rect], group_b: &[Rect], contacts: &mut Vec<Contact>) {
