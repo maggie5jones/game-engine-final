@@ -2,6 +2,8 @@ use assets_manager::{asset::Png, AssetCache};
 use frenderer::{
     input::{Input, Key},
     sprites::{Camera2D, SheetRegion, Transform},
+    bitfont::{BitFont},
+    nineslice::{NineSlice},
     wgpu, Renderer,
 };
 use rand::Rng;
@@ -121,8 +123,6 @@ const ATTACK_COOLDOWN_TIME: f32 = 0.1;
 const KNOCKBACK_TIME: f32 = 1.0;
 
 const DT: f32 = 1.0 / 60.0;
-
-const LEVELUP: u8 = 5;
 
 fn main() {
     #[cfg(not(target_arch = "wasm32"))]
@@ -317,9 +317,13 @@ impl Game {
             self.enemies.push((monster, 1));
         }
     }
-    fn draw_hud(&self, sprite_posns: &mut [Transform], sprite_gfx: &mut [SheetRegion]) {
+    #[allow(dead_code)]
+    fn draw_hud(&self, frend: &mut Renderer) {
+        let (ui_sprite_posns, ui_sprite_gfx) = frend.sprites_mut(1, 0..10);
+
         // render an upgrade menu
-        let j = self.health as usize + 3;
+        // let j = self.health as usize + 3;
+        let j = 0;
         if self.upgrade {
             let pause1_pos = Transform {
                 w: (TILE_SZ as f32 * 2.5) as u16, 
@@ -335,16 +339,16 @@ impl Game {
                 y: self.camera.screen_pos[1] + (self.camera.screen_size[1]/2 as f32) + 0.5, 
                 rot: 0.0,
             };
-            sprite_posns[j] = Transform {
+            ui_sprite_posns[j] = Transform {
                 x: q_pos.x as f32 * (TILE_SZ*2) as f32,
                 ..q_pos
             };
-            sprite_gfx[j] = LETTERQ.with_depth(0); // for some reason q isn't showing up even though e is
-            sprite_posns[j+1] = Transform {
+            ui_sprite_gfx[j] = LETTERQ.with_depth(0); // for some reason q isn't showing up even though e is
+            ui_sprite_posns[j+1] = Transform {
                 x: pause1_pos.x as f32 * (TILE_SZ*2) as f32,
                 ..pause1_pos
             };
-            sprite_gfx[j+1] = GREENUP.with_depth(0);
+            ui_sprite_gfx[j+1] = GREENUP.with_depth(0);
 
             let pause2_pos = Transform {
                 w: (TILE_SZ as f32 * 2.5) as u16, 
@@ -360,16 +364,16 @@ impl Game {
                 y: self.camera.screen_pos[1] + (self.camera.screen_size[1]/2 as f32) + 0.5, 
                 rot: 0.0,
             };
-            sprite_posns[j+2] = Transform {
+            ui_sprite_posns[j+2] = Transform {
                 x: e_pos.x as f32 * (TILE_SZ*2) as f32,
                 ..e_pos
             };
-            sprite_gfx[j+2] = LETTERE.with_depth(0);
-            sprite_posns[j+3] = Transform {
+            ui_sprite_gfx[j+2] = LETTERE.with_depth(0);
+            ui_sprite_posns[j+3] = Transform {
                 x: pause2_pos.x as f32 * (TILE_SZ*2) as f32,
                 ..pause2_pos
             };
-            sprite_gfx[j+3] = REDUP.with_depth(0);
+            ui_sprite_gfx[j+3] = REDUP.with_depth(0);
         }
         
         // draw UI with health and experience
@@ -382,11 +386,11 @@ impl Game {
         };
         for i in 0..self.health {
             let k = i as usize + 2;
-            sprite_posns[k] = Transform {
+            ui_sprite_posns[k] = Transform {
                 x: heart_pos.x + i as f32 * TILE_SZ as f32,
                 ..heart_pos
             };
-            sprite_gfx[k] = HEART.with_depth(0);
+            ui_sprite_gfx[k] = HEART.with_depth(0);
         }
         let exp_pos = Transform {
             w: TILE_SZ as u16, 
@@ -397,11 +401,11 @@ impl Game {
         };
         for i in 0..self.xp {
             let l = i as usize + 3 + self.health as usize;
-            sprite_posns[l] = Transform {
+            ui_sprite_posns[l] = Transform {
                 x: exp_pos.x - i as f32 * 12 as f32,
                 ..exp_pos
             };
-            sprite_gfx[l] = EXPERIENCE.with_depth(0);
+            ui_sprite_gfx[l] = EXPERIENCE.with_depth(0);
         }
         
         // render a game end menu
@@ -426,9 +430,10 @@ impl Game {
         frend.sprite_group_resize(0, self.sprite_count());
         frend.sprite_group_set_camera(0, self.camera);
 
-        let _sprites_used = self.level().render_into(frend, 0);
+        let sprites_used = self.level().render_into(frend, 0);
         // println!("sprites used: {}", sprites_used);
-        let (sprite_posns, sprite_gfx) = frend.sprites_mut(0, 10..); // 10 used to be sprites_used (not sure why changing it worked to render the menu but it did)
+        let (sprite_posns, sprite_gfx) = frend.sprites_mut(0, sprites_used..); // 10 used to be sprites_used (not sure why changing it worked to render the menu but it did)
+        
         
         for (enemy, (trf, uv)) in self
             .enemies
@@ -452,8 +457,10 @@ impl Game {
         }
         let sprite_posns = &mut sprite_posns[self.enemies.len()..];
         let sprite_gfx = &mut sprite_gfx[self.enemies.len()..];
+
         // draw pause menu & HUD
-        self.draw_hud(sprite_posns, sprite_gfx);
+        self.draw_hud(frend);
+
         sprite_posns[0] = Transform {
             w: TILE_SZ as u16,
             h: TILE_SZ as u16,
@@ -516,10 +523,11 @@ impl Game {
     fn simulate(&mut self, input: &Input, dt: f32) {
         self.spawn_enemies();
         
-        if self.xp == LEVELUP { // upgrade menu showing up is a bit buggy but seems to work :)
+        if self.xp >= 5 {
+            self.xp = 0;
+            self.health += 1;
             self.upgrade = true;
             self.paused = true;
-            self.xp = 0;
         }
         if self.upgrade {
             if input.is_key_pressed(Key::KeyQ) {
