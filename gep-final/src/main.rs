@@ -50,7 +50,7 @@ const PLAYER: [SheetRegion; 4] = [
     SheetRegion::rect(461 + 16 * 3, 39, 16, 16),
     SheetRegion::rect(461 + 16, 39, 16, 16),
 ];
-const PLAYER_ATK: [SheetRegion; 4] = [
+const _PLAYER_ATK: [SheetRegion; 4] = [
     //n, e, s, w
     SheetRegion::rect(428, 0, 16, 8), // offset by 8px in direction
     SheetRegion::rect(349, 22, 8, 16),
@@ -114,7 +114,7 @@ const SCREEN_FAST_MARGIN: f32 = 64.0;
 // pixels per second
 const PLAYER_SPEED: f32 = 64.0;
 const ENEMY_SPEED: f32 = 32.0;
-const KNOCKBACK_SPEED: f32 = 128.0;
+const _KNOCKBACK_SPEED: f32 = 128.0;
 
 const ATTACK_MAX_TIME: f32 = 0.3;
 const ATTACK_COOLDOWN_TIME: f32 = 0.1;
@@ -319,7 +319,7 @@ impl Game {
     }
     fn draw_hud(&self, sprite_posns: &mut [Transform], sprite_gfx: &mut [SheetRegion]) {
         // render an upgrade menu
-        let j = 3 + self.health as usize;
+        let j = self.health as usize + 3;
         if self.upgrade {
             let pause1_pos = Transform {
                 w: (TILE_SZ as f32 * 2.5) as u16, 
@@ -339,7 +339,7 @@ impl Game {
                 x: q_pos.x as f32 * (TILE_SZ*2) as f32,
                 ..q_pos
             };
-            sprite_gfx[j] = LETTERQ.with_depth(0);
+            sprite_gfx[j] = LETTERQ.with_depth(0); // for some reason q isn't showing up even though e is
             sprite_posns[j+1] = Transform {
                 x: pause1_pos.x as f32 * (TILE_SZ*2) as f32,
                 ..pause1_pos
@@ -381,12 +381,12 @@ impl Game {
             rot: 0.0,
         };
         for i in 0..self.health {
-            let j = i as usize + 2;
-            sprite_posns[j] = Transform {
+            let k = i as usize + 2;
+            sprite_posns[k] = Transform {
                 x: heart_pos.x + i as f32 * TILE_SZ as f32,
                 ..heart_pos
             };
-            sprite_gfx[j] = HEART.with_depth(0);
+            sprite_gfx[k] = HEART.with_depth(0);
         }
         let exp_pos = Transform {
             w: TILE_SZ as u16, 
@@ -396,12 +396,12 @@ impl Game {
             rot: 0.0,
         };
         for i in 0..self.xp {
-            let j = i as usize + 3 + self.health as usize;
-            sprite_posns[j] = Transform {
+            let l = i as usize + 3 + self.health as usize;
+            sprite_posns[l] = Transform {
                 x: exp_pos.x - i as f32 * 12 as f32,
                 ..exp_pos
             };
-            sprite_gfx[j] = EXPERIENCE.with_depth(0);
+            sprite_gfx[l] = EXPERIENCE.with_depth(0);
         }
         
         // render a game end menu
@@ -452,6 +452,8 @@ impl Game {
         }
         let sprite_posns = &mut sprite_posns[self.enemies.len()..];
         let sprite_gfx = &mut sprite_gfx[self.enemies.len()..];
+        // draw pause menu & HUD
+        self.draw_hud(sprite_posns, sprite_gfx);
         sprite_posns[0] = Transform {
             w: TILE_SZ as u16,
             h: TILE_SZ as u16,
@@ -468,8 +470,7 @@ impl Game {
             sprite_posns[0] = Transform::ZERO;
             sprite_gfx[0] = SheetRegion::ZERO;
         }
-        // draw pause menu & HUD
-        self.draw_hud(sprite_posns, sprite_gfx);
+        
         if self.attack_area.is_empty() {
             sprite_posns[1] = Transform::ZERO;
         } else {
@@ -494,23 +495,23 @@ impl Game {
             }
         }
         sprite_gfx[1] = BLANK.with_depth(0); //was player_atk[dir]
-        sprite_gfx[self.health as usize + 2] = ATK.with_depth(0);
+        sprite_gfx[self.health as usize + 2] = ATK.with_depth(0); // commenting this out made menu show up consistently
         // done point: draw hearts
-        let heart_pos = Transform {
-            w: (TILE_SZ/2) as u16, 
-            h: (TILE_SZ/2) as u16,
-            x: self.player.pos.x - (TILE_SZ/2) as f32,
-            y: self.player.pos.y + TILE_SZ as f32, 
-            rot: 0.0,
-        };
-        for i in 0..self.health {
-            let j = i as usize + 2;
-            sprite_posns[j] = Transform {
-                x: heart_pos.x + i as f32 * (TILE_SZ/2) as f32 - 0.5,
-                ..heart_pos
-            };
-            sprite_gfx[j] = HEART.with_depth(0);
-        }
+        // let heart_pos = Transform {
+        //     w: (TILE_SZ/2) as u16, 
+        //     h: (TILE_SZ/2) as u16,
+        //     x: self.player.pos.x - (TILE_SZ/2) as f32,
+        //     y: self.player.pos.y + TILE_SZ as f32, 
+        //     rot: 0.0,
+        // };
+        // for i in 0..self.health {
+        //     let j = i as usize + 2;
+        //     sprite_posns[j] = Transform {
+        //         x: heart_pos.x + i as f32 * (TILE_SZ/2) as f32 - 0.5,
+        //         ..heart_pos
+        //     };
+        //     sprite_gfx[j] = HEART.with_depth(0);
+        // }
     }
     fn simulate(&mut self, input: &Input, dt: f32) {
         self.spawn_enemies();
@@ -546,9 +547,9 @@ impl Game {
         if self.knockback_timer > 0.0 {
             self.knockback_timer -= dt;
         }
-        let mut dx = input.key_axis(Key::ArrowLeft, Key::ArrowRight) * PLAYER_SPEED * DT;
+        let dx = input.key_axis(Key::ArrowLeft, Key::ArrowRight) * PLAYER_SPEED * DT;
         // now down means -y and up means +y!  beware!
-        let mut dy = input.key_axis(Key::ArrowDown, Key::ArrowUp) * PLAYER_SPEED * DT;
+        let dy = input.key_axis(Key::ArrowDown, Key::ArrowUp) * PLAYER_SPEED * DT;
         let attacking = !self.attack_area.is_empty();
         let knockback = self.knockback_timer > 0.0;
         if attacking {
