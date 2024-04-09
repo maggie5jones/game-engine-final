@@ -63,8 +63,13 @@ const ENEMY: [SheetRegion; 4] = [
     SheetRegion::rect(533, 39, 16, 16),
     SheetRegion::rect(533 + 16 * 3, 39, 16, 16),
 ];
-
+const GREENUP: SheetRegion = SheetRegion::rect(525, 27, 8, 8);
 const HEART: SheetRegion = SheetRegion::rect(525, 35, 8, 8);
+const REDUP: SheetRegion = SheetRegion::rect(525, 43, 8, 8);
+const EXPERIENCE: SheetRegion = SheetRegion::rect(525, 50, 8, 8);
+
+const LETTERQ: SheetRegion = SheetRegion::rect(154, 90, 8, 8);
+const LETTERE: SheetRegion = SheetRegion::rect(46, 90, 8, 8);
 const ATK: SheetRegion = SheetRegion::rect(525, 19, 8, 8);
 const BLANK: SheetRegion = SheetRegion::rect(600, 600, 16, 16);
 
@@ -94,7 +99,10 @@ struct Game {
     attack_timer: f32,
     knockback_timer: f32,
     health: u8,
+    xp: u8,
     paused: bool,
+    game_end: bool,
+    upgrade: bool,
 }
 
 // Feel free to change this if you use a different tilesheet
@@ -113,6 +121,8 @@ const ATTACK_COOLDOWN_TIME: f32 = 0.1;
 const KNOCKBACK_TIME: f32 = 1.0;
 
 const DT: f32 = 1.0 / 60.0;
+
+const LEVELUP: u8 = 5;
 
 fn main() {
     #[cfg(not(target_arch = "wasm32"))]
@@ -224,6 +234,7 @@ impl Game {
         };
         let sprite_estimate =
             levels[current_level].sprite_count() + levels[current_level].starts().len();
+        // tile sprite group
         renderer.sprite_group_add(
             &tile_tex,
             vec![Transform::ZERO; sprite_estimate],
@@ -250,12 +261,15 @@ impl Game {
             attack_range: 3.0,
             levels,
             health: 3,
+            xp: 0,
             enemies: vec![],
             player: Pos {
                 pos: player_start,
                 dir: Dir::S,
             },
             paused: false,
+            game_end: false,
+            upgrade: false,
         };
         game.enter_level(player_start);
         game
@@ -279,9 +293,13 @@ impl Game {
     }
     fn sprite_count(&self) -> usize {
         //todo!("count how many entities and other sprites we have");
-        self.level().sprite_count() + self.enemies.len() + 1 + 1 + 1 + self.health as usize //+ player + sword + atk circle + hearts
+        self.level().sprite_count() + self.enemies.len() + 6 + self.health as usize // enemies + player + sword + hearts + menus (?)
     }
-    fn render(&mut self, frend: &mut Renderer) {
+    fn spawn_enemies(&mut self) {
+        if self.paused || self.game_end { // stop generating enemies when paused/game ends
+            return;
+        }
+
         let mut rng = rand::thread_rng();
         let rand = rng.gen_range(0..1000);
         if rand > 960 {
@@ -298,13 +316,120 @@ impl Game {
             };
             self.enemies.push((monster, 1));
         }
+    }
+    fn draw_hud(&self, sprite_posns: &mut [Transform], sprite_gfx: &mut [SheetRegion]) {
+        // render an upgrade menu
+        let j = 2 + self.health as usize;
+        if self.upgrade {
+            let pause1_pos = Transform {
+                w: (TILE_SZ as f32 * 2.5) as u16, 
+                h: (TILE_SZ as f32 * 2.5) as u16,
+                x: self.camera.screen_pos[0] + 2.5 as f32,
+                y: self.camera.screen_pos[1] + self.camera.screen_size[1]/2 as f32, 
+                rot: 0.0,
+            };
+            let q_pos = Transform {
+                w: (TILE_SZ) as u16, 
+                h: (TILE_SZ) as u16,
+                x: self.camera.screen_pos[0] + 2.45 as f32,
+                y: self.camera.screen_pos[1] + (self.camera.screen_size[1]/2 as f32) + 0.5, 
+                rot: 0.0,
+            };
+            sprite_posns[j] = Transform {
+                x: q_pos.x as f32 * (TILE_SZ*2) as f32,
+                ..q_pos
+            };
+            sprite_gfx[j] = LETTERQ.with_depth(0);
+            sprite_posns[j+1] = Transform {
+                x: pause1_pos.x as f32 * (TILE_SZ*2) as f32,
+                ..pause1_pos
+            };
+            sprite_gfx[j+1] = GREENUP.with_depth(0);
+
+            let pause2_pos = Transform {
+                w: (TILE_SZ as f32 * 2.5) as u16, 
+                h: (TILE_SZ as f32 * 2.5) as u16,
+                x: self.camera.screen_pos[0] + 4.5 as f32,
+                y: self.camera.screen_pos[1] + self.camera.screen_size[1]/2 as f32, 
+                rot: 0.0,
+            };
+            let e_pos = Transform {
+                w: (TILE_SZ) as u16, 
+                h: (TILE_SZ) as u16,
+                x: self.camera.screen_pos[0] + 4.45 as f32,
+                y: self.camera.screen_pos[1] + (self.camera.screen_size[1]/2 as f32) + 0.5, 
+                rot: 0.0,
+            };
+            sprite_posns[j+2] = Transform {
+                x: e_pos.x as f32 * (TILE_SZ*2) as f32,
+                ..e_pos
+            };
+            sprite_gfx[j+2] = LETTERE.with_depth(0);
+            sprite_posns[j+3] = Transform {
+                x: pause2_pos.x as f32 * (TILE_SZ*2) as f32,
+                ..pause2_pos
+            };
+            sprite_gfx[j+3] = REDUP.with_depth(0);
+        }
+        
+        // draw UI with health and experience
+        let heart_pos = Transform {
+            w: TILE_SZ as u16, 
+            h: TILE_SZ as u16,
+            x: self.camera.screen_pos[0] + 10 as f32,
+            y: self.camera.screen_pos[1] + 6 as f32,
+            rot: 0.0,
+        };
+        for i in 0..self.health {
+            let j = i as usize + 2;
+            sprite_posns[j] = Transform {
+                x: heart_pos.x + i as f32 * TILE_SZ as f32,
+                ..heart_pos
+            };
+            sprite_gfx[j] = HEART.with_depth(0);
+        }
+        let exp_pos = Transform {
+            w: TILE_SZ as u16, 
+            h: TILE_SZ as u16,
+            x: self.camera.screen_pos[0] + self.camera.screen_size[0] - 10 as f32,
+            y: self.camera.screen_pos[1] + self.camera.screen_size[1] - 10 as f32,
+            rot: 0.0,
+        };
+        for i in 0..self.xp {
+            let j = i as usize + 2 + self.health as usize;
+            sprite_posns[j] = Transform {
+                x: exp_pos.x - i as f32 * 12 as f32,
+                ..exp_pos
+            };
+            sprite_gfx[j] = EXPERIENCE.with_depth(0);
+        }
+        
+        // render a game end menu
+        // if self.game_end {
+        //     let heart_pos = Transform {
+        //         w: (TILE_SZ) as u16, 
+        //         h: (TILE_SZ) as u16,
+        //         x: self.camera.screen_pos[0] + 10 as f32,
+        //         y: self.camera.screen_pos[1] + self.camera.screen_size[1] - 10 as f32, 
+        //         rot: 0.0,
+        //     };
+        //     let j = 2 + self.health as usize;
+        //     sprite_posns[j] = Transform {
+        //         x: heart_pos.x as f32 * (TILE_SZ) as f32,
+        //         ..heart_pos
+        //     };
+        //     sprite_gfx[j] = HEART.with_depth(0);
+        // }
+    }
+    fn render(&mut self, frend: &mut Renderer) {
         // make this exactly as big as we need
         frend.sprite_group_resize(0, self.sprite_count());
         frend.sprite_group_set_camera(0, self.camera);
 
-        let sprites_used = self.level().render_into(frend, 0);
-        let (sprite_posns, sprite_gfx) = frend.sprites_mut(0, sprites_used..);
-
+        let _sprites_used = self.level().render_into(frend, 0);
+        // println!("sprites used: {}", sprites_used);
+        let (sprite_posns, sprite_gfx) = frend.sprites_mut(0, 10..); // 10 used to be sprites_used (not sure why changing it worked to render the menu but it did)
+        
         for (enemy, (trf, uv)) in self
             .enemies
             .iter()
@@ -339,6 +464,12 @@ impl Game {
         } else{
             sprite_gfx[0] = PLAYER[self.player.dir as usize].with_depth(1);
         }
+        if self.game_end { // player disappears when game ends (no more health)
+            sprite_posns[0] = Transform::ZERO;
+            sprite_gfx[0] = SheetRegion::ZERO;
+        }
+        // draw pause menu & HUD
+        self.draw_hud(sprite_posns, sprite_gfx);
         if self.attack_area.is_empty() {
             sprite_posns[1] = Transform::ZERO;
         } else {
@@ -382,6 +513,34 @@ impl Game {
         }
     }
     fn simulate(&mut self, input: &Input, dt: f32) {
+        self.spawn_enemies();
+        
+        if self.xp == LEVELUP { // upgrade menu showing up is a bit buggy but seems to work :)
+            self.upgrade = true;
+            self.paused = true;
+            self.xp = 0;
+        }
+        if self.upgrade {
+            if input.is_key_pressed(Key::KeyQ) {
+                self.paused = false;
+                self.upgrade = false;
+                self.health += 2;
+            }
+            if input.is_key_pressed(Key::KeyE) {
+                self.paused = false;
+                self.upgrade = false;
+                self.attack_area.w *= 2;
+                self.attack_area.h *= 2;
+            }
+        }
+        if input.is_key_pressed(Key::Escape) {
+            self.paused = !self.paused;
+        }
+        if self.paused || self.game_end { // stop generating enemies when paused/game ends
+            // self.simulate_pause(input, dt);
+            return;
+        }
+        
         if self.attack_timer > 0.0 {
             self.attack_timer -= dt;
         }
@@ -570,13 +729,15 @@ impl Game {
                 self.enemies[contact.b_index].0.pos +=
                     find_displacement(p_rect, enemy_rect[contact.b_index]);
                 removable.push(contact.b_index);
+                self.xp += 1; // this might be wrong as it gives xp when an enemy dies in a wall
             }
             if contact.a_index == 0 {
                 if self.knockback_timer == 0.0 {
                     self.knockback_timer = KNOCKBACK_TIME;
                     self.health -= 1;
                     if self.health == 0 {
-                        panic!("Game Over!");
+                        // panic!("Game Over!");
+                        self.game_end = true;
                     }
                 } else if self.knockback_timer < KNOCKBACK_TIME {
                     // "turn off" the ability to get hit
@@ -591,8 +752,8 @@ impl Game {
         for i in removable.iter().rev() {
             self.enemies.swap_remove(*i);
         }
-        
     }
+    
 }
 
 fn generate_contact(group_a: &[Rect], group_b: &[Rect], contacts: &mut Vec<Contact>) {
