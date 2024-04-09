@@ -319,7 +319,7 @@ impl Game {
     }
     fn draw_hud(&self, sprite_posns: &mut [Transform], sprite_gfx: &mut [SheetRegion]) {
         // render an upgrade menu
-        let j = 2 + self.health as usize;
+        let j = 3 + self.health as usize;
         if self.upgrade {
             let pause1_pos = Transform {
                 w: (TILE_SZ as f32 * 2.5) as u16, 
@@ -396,7 +396,7 @@ impl Game {
             rot: 0.0,
         };
         for i in 0..self.xp {
-            let j = i as usize + 2 + self.health as usize;
+            let j = i as usize + 3 + self.health as usize;
             sprite_posns[j] = Transform {
                 x: exp_pos.x - i as f32 * 12 as f32,
                 ..exp_pos
@@ -529,8 +529,7 @@ impl Game {
             if input.is_key_pressed(Key::KeyE) {
                 self.paused = false;
                 self.upgrade = false;
-                self.attack_area.w *= 2;
-                self.attack_area.h *= 2;
+                self.attack_range += 0.5;
             }
         }
         if input.is_key_pressed(Key::Escape) {
