@@ -1,8 +1,6 @@
 use assets_manager::{asset::Png, AssetCache};
 use frenderer::{
-    input::{Input, Key},
-    sprites::{Camera2D, SheetRegion, Transform},
-    wgpu, Renderer,
+    input::{Input, Key}, sprites::{Camera2D, SheetRegion, Transform}, wgpu, Immediate
 };
 use rand::Rng;
 mod geom;
@@ -10,21 +8,6 @@ mod grid;
 use geom::*;
 mod level;
 use level::Level;
-
-#[derive(Debug, PartialEq, Eq)]
-enum EntityType {
-    Player,
-    Enemy,
-    // which level, grid x in dest level, grid y in dest level
-    #[allow(dead_code)]
-    Door(String, u16, u16),
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct TileData {
-    solid: bool,
-    sheet_region: SheetRegion,
-}
 
 #[derive(Clone, Debug)]
 struct Contact {
@@ -59,7 +42,7 @@ const _PLAYER_ATK: [SheetRegion; 4] = [
 ];
 const ENEMY: [SheetRegion; 4] = [
     SheetRegion::rect(533 + 16 * 2, 39, 16, 16),
-    SheetRegion::rect(533 + 16 * 1, 39, 16, 16),
+    SheetRegion::rect(533 + 16, 39, 16, 16),
     SheetRegion::rect(533, 39, 16, 16),
     SheetRegion::rect(533 + 16 * 3, 39, 16, 16),
 ];
@@ -144,7 +127,8 @@ fn main() {
     let mut now = frenderer::clock::Instant::now();
     let mut acc = 0.0;
     drv.run_event_loop::<(), _>(
-        move |window, mut frend| {
+        move |window, frend| {
+            let mut frend = Immediate::new(frend);
             let game = Game::new(&mut frend, &cache);
             (window, game, frend)
         },
@@ -161,7 +145,7 @@ fn main() {
                     event: WindowEvent::Resized(size),
                     ..
                 } => {
-                    if !frend.gpu.is_web() {
+                    if !frend.gpu().is_web() {
                         frend.resize_surface(size.width, size.height);
                     }
                     window.request_redraw();
@@ -196,7 +180,7 @@ fn main() {
 }
 
 impl Game {
-    fn new(renderer: &mut Renderer, cache: &AssetCache) -> Self {
+    fn new(renderer: &mut Immediate, cache: &AssetCache) -> Self {
         let tile_handle = cache
             .load::<Png>("texture")
             .expect("Couldn't load tilesheet img");
@@ -213,18 +197,24 @@ impl Game {
                     .load::<String>("level3")
                     .expect("Couldn't access level3.txt")
                     .read(),
+                    0,
+                    0,
             ),
             Level::from_str(
                 &cache
                     .load::<String>("level1")
                     .expect("Couldn't access level1.txt")
                     .read(),
+                    0,
+                    0,
             ),
             Level::from_str(
                 &cache
                     .load::<String>("level2")
                     .expect("Couldn't access level2.txt")
                     .read(),
+                    0,
+                    0,
             ),
         ];
         let current_level = 0;
@@ -244,7 +234,7 @@ impl Game {
         let player_start = *levels[current_level]
             .starts()
             .iter()
-            .find(|(t, _)| *t == EntityType::Player)
+            .find(|(t, _)| t.name() == "player")
             .map(|(_, ploc)| ploc)
             .expect("Start level doesn't put the player anywhere");
         let mut game = Game {
@@ -281,19 +271,11 @@ impl Game {
         self.enemies.clear();
         self.player.pos = player_pos;
         for (etype, pos) in self.levels[self.current_level].starts().iter() {
-            match etype {
-                EntityType::Player => {}
-                EntityType::Door(_rm, _x, _y) => {}
-                EntityType::Enemy => self.enemies.push((Pos {
-                    pos: *pos,
-                    dir: Dir::S,
-                }, 1)), // 1 is the health of the enemy
-            }
+            if etype.name() == "enemy" { self.enemies.push((Pos {
+                pos: *pos,
+                dir: Dir::S,
+            }, 1)) };
         }
-    }
-    fn sprite_count(&self) -> usize {
-        //todo!("count how many entities and other sprites we have");
-        self.level().sprite_count() + self.enemies.len() + 6 + self.health as usize // enemies + player + sword + hearts + menus (?)
     }
     fn spawn_enemies(&mut self) {
         if self.paused || self.game_end { // stop generating enemies when paused/game ends
@@ -306,7 +288,7 @@ impl Game {
             let mut randx = rng.gen_range(2..self.levels[self.current_level].width()*TILE_SZ);
             let mut randy = rng.gen_range(2..self.levels[self.current_level].height()*TILE_SZ);
             while ((randx as f32 - self.player.pos.x).abs() < 48.0) && ((randy as f32 - self.player.pos.y).abs() < 48.0)
-            && self.level().get_tile_at(Vec2{x:randx as f32, y:randy as f32}).unwrap().solid == false  {
+            && !self.level().get_tile_at(Vec2{x:randx as f32, y:randy as f32}).unwrap().solid  {
                 randx = rng.gen_range(2..self.levels[self.current_level].width()*TILE_SZ);
                 randy = rng.gen_range(2..self.levels[self.current_level].height()*TILE_SZ);
             } 
@@ -317,91 +299,122 @@ impl Game {
             self.enemies.push((monster, 1));
         }
     }
-    fn draw_hud(&self, sprite_posns: &mut [Transform], sprite_gfx: &mut [SheetRegion]) {
+    fn draw_hud(&self, frend: &mut Immediate) {
         // render an upgrade menu
-        let j = self.health as usize + 3;
         if self.upgrade {
             let pause1_pos = Transform {
                 w: (TILE_SZ as f32 * 2.5) as u16, 
                 h: (TILE_SZ as f32 * 2.5) as u16,
-                x: self.camera.screen_pos[0] + 2.5 as f32,
-                y: self.camera.screen_pos[1] + self.camera.screen_size[1]/2 as f32, 
+                x: self.camera.screen_pos[0] + 2.5,
+                y: self.camera.screen_pos[1] + self.camera.screen_size[1]/2_f32, 
                 rot: 0.0,
             };
             let q_pos = Transform {
                 w: (TILE_SZ) as u16, 
                 h: (TILE_SZ) as u16,
-                x: self.camera.screen_pos[0] + 2.45 as f32,
-                y: self.camera.screen_pos[1] + (self.camera.screen_size[1]/2 as f32) + 0.5, 
+                x: self.camera.screen_pos[0] + 2.45,
+                y: self.camera.screen_pos[1] + (self.camera.screen_size[1]/2_f32) + 0.5, 
                 rot: 0.0,
             };
-            sprite_posns[j] = Transform {
-                x: q_pos.x as f32 * (TILE_SZ*2) as f32,
+
+            // sprite_posns[j] = Transform {
+            //     x: q_pos.x as f32 * (TILE_SZ*2) as f32,
+            //     ..q_pos
+            // };
+            // sprite_gfx[j] = LETTERQ.with_depth(0); // for some reason q isn't showing up even though e is
+            frend.draw_sprite(1, Transform {
+                x: q_pos.x * (TILE_SZ*2) as f32,
                 ..q_pos
-            };
-            sprite_gfx[j] = LETTERQ.with_depth(0); // for some reason q isn't showing up even though e is
-            sprite_posns[j+1] = Transform {
-                x: pause1_pos.x as f32 * (TILE_SZ*2) as f32,
+            }, LETTERQ.with_depth(0));
+
+            // sprite_posns[j+1] = Transform {
+            //     x: pause1_pos.x as f32 * (TILE_SZ*2) as f32,
+            //     ..pause1_pos
+            // };
+            // sprite_gfx[j+1] = GREENUP.with_depth(0);
+
+            frend.draw_sprite(1, Transform {
+                x: pause1_pos.x * (TILE_SZ*2) as f32,
                 ..pause1_pos
-            };
-            sprite_gfx[j+1] = GREENUP.with_depth(0);
+            }, GREENUP.with_depth(0));
 
             let pause2_pos = Transform {
                 w: (TILE_SZ as f32 * 2.5) as u16, 
                 h: (TILE_SZ as f32 * 2.5) as u16,
-                x: self.camera.screen_pos[0] + 4.5 as f32,
-                y: self.camera.screen_pos[1] + self.camera.screen_size[1]/2 as f32, 
+                x: self.camera.screen_pos[0] + 4.5_f32,
+                y: self.camera.screen_pos[1] + self.camera.screen_size[1]/2_f32, 
                 rot: 0.0,
             };
             let e_pos = Transform {
                 w: (TILE_SZ) as u16, 
                 h: (TILE_SZ) as u16,
-                x: self.camera.screen_pos[0] + 4.45 as f32,
-                y: self.camera.screen_pos[1] + (self.camera.screen_size[1]/2 as f32) + 0.5, 
+                x: self.camera.screen_pos[0] + 4.45_f32,
+                y: self.camera.screen_pos[1] + (self.camera.screen_size[1]/2_f32) + 0.5, 
                 rot: 0.0,
             };
-            sprite_posns[j+2] = Transform {
-                x: e_pos.x as f32 * (TILE_SZ*2) as f32,
+
+            // sprite_posns[j+2] = Transform {
+            //     x: e_pos.x as f32 * (TILE_SZ*2) as f32,
+            //     ..e_pos
+            // };
+            // sprite_gfx[j+2] = LETTERE.with_depth(0);
+            
+            frend.draw_sprite(1, Transform {
+                x: e_pos.x * (TILE_SZ*2) as f32,
                 ..e_pos
-            };
-            sprite_gfx[j+2] = LETTERE.with_depth(0);
-            sprite_posns[j+3] = Transform {
-                x: pause2_pos.x as f32 * (TILE_SZ*2) as f32,
-                ..pause2_pos
-            };
-            sprite_gfx[j+3] = REDUP.with_depth(0);
+            }, LETTERE.with_depth(0));
+
+            // sprite_posns[j+3] = Transform {
+            //     x: pause2_pos.x as f32 * (TILE_SZ*2) as f32,
+            //     ..pause2_pos
+            // };
+            // sprite_gfx[j+3] = REDUP.with_depth(0);
+
+            frend.draw_sprite(1, Transform {
+                    x: pause2_pos.x * (TILE_SZ*2) as f32,
+                    ..pause2_pos
+                }, REDUP.with_depth(0));
+            
         }
         
         // draw UI with health and experience
         let heart_pos = Transform {
             w: TILE_SZ as u16, 
             h: TILE_SZ as u16,
-            x: self.camera.screen_pos[0] + 10 as f32,
-            y: self.camera.screen_pos[1] + 6 as f32,
+            x: self.camera.screen_pos[0] + 10_f32,
+            y: self.camera.screen_pos[1] + 6_f32,
             rot: 0.0,
         };
         for i in 0..self.health {
-            let k = i as usize + 2;
-            sprite_posns[k] = Transform {
+            // sprite_posns[k] = Transform {
+            //     x: heart_pos.x + i as f32 * TILE_SZ as f32,
+            //     ..heart_pos
+            // };
+            // sprite_gfx[k] = HEART.with_depth(0);
+            frend.draw_sprite(1, Transform {
                 x: heart_pos.x + i as f32 * TILE_SZ as f32,
                 ..heart_pos
-            };
-            sprite_gfx[k] = HEART.with_depth(0);
+            }, HEART.with_depth(0));
         }
         let exp_pos = Transform {
             w: TILE_SZ as u16, 
             h: TILE_SZ as u16,
-            x: self.camera.screen_pos[0] + self.camera.screen_size[0] - 10 as f32,
-            y: self.camera.screen_pos[1] + self.camera.screen_size[1] - 10 as f32,
+            x: self.camera.screen_pos[0] + self.camera.screen_size[0] - 10_f32,
+            y: self.camera.screen_pos[1] + self.camera.screen_size[1] - 10_f32,
             rot: 0.0,
         };
         for i in 0..self.xp {
-            let l = i as usize + 3 + self.health as usize;
-            sprite_posns[l] = Transform {
-                x: exp_pos.x - i as f32 * 12 as f32,
+            // let l = i as usize + 3 + self.health as usize;
+            // sprite_posns[l] = Transform {
+            //     x: exp_pos.x - i as f32 * 12 as f32,
+            //     ..exp_pos
+            // };
+            // sprite_gfx[l] = EXPERIENCE.with_depth(0);
+
+            frend.draw_sprite(1, Transform {
+                x: exp_pos.x - i as f32 * 12_f32,
                 ..exp_pos
-            };
-            sprite_gfx[l] = EXPERIENCE.with_depth(0);
+            }, EXPERIENCE.with_depth(0));
         }
         
         // render a game end menu
@@ -421,81 +434,129 @@ impl Game {
         //     sprite_gfx[j] = HEART.with_depth(0);
         // }
     }
-    fn render(&mut self, frend: &mut Renderer) {
+    fn render(&mut self, frend: &mut Immediate) {
         // make this exactly as big as we need
-        frend.sprite_group_resize(0, self.sprite_count());
         frend.sprite_group_set_camera(0, self.camera);
 
-        let _sprites_used = self.level().render_into(frend, 0);
+        self.level().render_immediate(frend);
         // println!("sprites used: {}", sprites_used);
-        let (sprite_posns, sprite_gfx) = frend.sprites_mut(0, 10..); // 10 used to be sprites_used (not sure why changing it worked to render the menu but it did)
         
-        for (enemy, (trf, uv)) in self
-            .enemies
-            .iter()
-            .zip(sprite_posns.iter_mut().zip(sprite_gfx.iter_mut()))
+        for enemy in self.enemies.iter()
         {
             if enemy.1 == 1 {
-                *trf = Transform {
+                frend.draw_sprite(0, Transform {
                     w: TILE_SZ as u16,
                     h: TILE_SZ as u16,
                     x: enemy.0.pos.x,
                     y: enemy.0.pos.y,
                     rot: 0.0,
-                };
-                *uv = ENEMY[enemy.0.dir as usize];
+                }, ENEMY[enemy.0.dir as usize]);
             }
             else {
-                *trf = Transform::ZERO;
-                *uv = SheetRegion::ZERO;
+                frend.draw_sprite(0, Transform::ZERO, SheetRegion::ZERO);
             }
         }
-        let sprite_posns = &mut sprite_posns[self.enemies.len()..];
-        let sprite_gfx = &mut sprite_gfx[self.enemies.len()..];
+
         // draw pause menu & HUD
-        self.draw_hud(sprite_posns, sprite_gfx);
-        sprite_posns[0] = Transform {
-            w: TILE_SZ as u16,
-            h: TILE_SZ as u16,
-            x: self.player.pos.x,
-            y: self.player.pos.y,
-            rot: 0.0,
-        };
+        self.draw_hud(frend);
+        
+        
         if self.knockback_timer > 0.0 && self.knockback_timer % 0.5 < 0.25 {
-            sprite_gfx[0] = BLANK.with_depth(1);
+            frend.draw_sprite(0, Transform {
+                w: TILE_SZ as u16,
+                h: TILE_SZ as u16,
+                x: self.player.pos.x,
+                y: self.player.pos.y,
+                rot: 0.0,
+            }, SheetRegion::ZERO);
         } else{
-            sprite_gfx[0] = PLAYER[self.player.dir as usize].with_depth(1);
+            frend.draw_sprite(0, Transform {
+                w: TILE_SZ as u16,
+                h: TILE_SZ as u16,
+                x: self.player.pos.x,
+                y: self.player.pos.y,
+                rot: 0.0,
+            }, PLAYER[self.player.dir as usize].with_depth(1));
         }
         if self.game_end { // player disappears when game ends (no more health)
-            sprite_posns[0] = Transform::ZERO;
-            sprite_gfx[0] = SheetRegion::ZERO;
+            frend.draw_sprite(0, Transform {
+                w: TILE_SZ as u16,
+                h: TILE_SZ as u16,
+                x: self.player.pos.x,
+                y: self.player.pos.y,
+                rot: 0.0,
+            }, SheetRegion::ZERO);
         }
         
         if self.attack_area.is_empty() {
-            sprite_posns[1] = Transform::ZERO;
+            // sprite_posns[1] = Transform::ZERO;
         } else {
             let (w, h) = match self.player.dir {
                 Dir::N | Dir::S => (16, 8),
                 _ => (8, 16),
             };
             let delta = self.player.dir.to_vec2() * 7.0;
-            sprite_posns[1] = Transform {
+            // sprite_posns[1] = Transform {
+            //     w,
+            //     h,
+            //     x: self.player.pos.x + delta.x,
+            //     y: self.player.pos.y + delta.y,
+            //     rot: 0.0,
+            // };
+            // sprite_posns[self.health as usize + 2] = Transform {
+            //     w: (self.attack_range as usize * TILE_SZ) as u16,
+            //     h: (self.attack_range as usize * TILE_SZ) as u16,
+            //     x: self.player.pos.x,
+            //     y: self.player.pos.y,
+            //     rot: 0.0,
+            // };
+            frend.draw_sprite(0, Transform {
                 w,
                 h,
                 x: self.player.pos.x + delta.x,
                 y: self.player.pos.y + delta.y,
                 rot: 0.0,
-            };
-            sprite_posns[self.health as usize + 2] = Transform {
+            }, BLANK.with_depth(0));
+
+            frend.draw_sprite(0, Transform {
                 w: (self.attack_range as usize * TILE_SZ) as u16,
                 h: (self.attack_range as usize * TILE_SZ) as u16,
                 x: self.player.pos.x,
                 y: self.player.pos.y,
                 rot: 0.0,
-            }
+            }, ATK.with_depth(0));    
+            
         }
-        sprite_gfx[1] = BLANK.with_depth(0); //was player_atk[dir]
-        sprite_gfx[self.health as usize + 2] = ATK.with_depth(0); // commenting this out made menu show up consistently
+        // sprite_gfx[1] = BLANK.with_depth(0); //was player_atk[dir]
+        // sprite_gfx[self.health as usize + 2] = ATK.with_depth(0); // commenting this out made menu show up consistently
+
+        if self.paused {
+            let _nine_tiled = frenderer::nineslice::NineSlice::with_corner_edge_center(
+                frenderer::nineslice::CornerSlice {
+                    w: 8.0,
+                    h: 8.0,
+                    region: SheetRegion::rect(0,0,8,8),
+                }, 
+                frenderer::nineslice::Slice {
+                    w: 2.0,
+                    h: 16.0,
+                    region: SheetRegion::rect(0,0,2,16).with_depth(1),
+                    repeat: frenderer::nineslice::Repeat::Tile,
+                }, 
+                frenderer::nineslice::Slice {
+                    w: 16.0,
+                    h: 2.0,
+                    region: SheetRegion::rect(0,0,16,2).with_depth(1),
+                    repeat: frenderer::nineslice::Repeat::Tile,
+                }, 
+                frenderer::nineslice::Slice {
+                    w: 16.0,
+                    h: 16.0,
+                    region: SheetRegion::rect(0,0,2,16).with_depth(2),
+                    repeat: frenderer::nineslice::Repeat::Tile,
+                });
+            // let spirtesForPause = nine_tiled.draw(sprite_posns, sprite_gfx, 32.0, 32.0, TILE_SZ as f32*6.0, TILE_SZ as f32*6.0, 0);
+        }
         // done point: draw hearts
         // let heart_pos = Transform {
         //     w: (TILE_SZ/2) as u16, 
@@ -537,7 +598,8 @@ impl Game {
             self.paused = !self.paused;
         }
         if self.paused || self.game_end { // stop generating enemies when paused/game ends
-            // self.simulate_pause(input, dt);
+            // self.simulate_pause(input, dt)
+            
             return;
         }
         
@@ -551,13 +613,11 @@ impl Game {
         // now down means -y and up means +y!  beware!
         let dy = input.key_axis(Key::ArrowDown, Key::ArrowUp) * PLAYER_SPEED * DT;
         let attacking = !self.attack_area.is_empty();
-        let knockback = self.knockback_timer > 0.0;
+        let _knockback = self.knockback_timer > 0.0;
         if attacking {
             // while attacking we can't move
             // dx = 0.0;
             // dy = 0.0;
-        } else if knockback {
-
         } else {
             // not attacking, no knockback, do normal movement
             if dx > 0.0 {
@@ -594,7 +654,7 @@ impl Game {
         }
         // self.player.pos += Vec2 { x: dx, y: dy };
         let dest = self.player.pos + Vec2 { x: dx, y: dy };
-        if self.level().get_tile_at(dest).unwrap().solid == false {
+        if !self.level().get_tile_at(dest).unwrap().solid {
             self.player.pos = dest;
         }
         let mut rng = rand::thread_rng();
@@ -774,7 +834,7 @@ fn generate_contact(group_a: &[Rect], group_b: &[Rect], contacts: &mut Vec<Conta
 
 fn generate_tile_contact(group_a: &[Rect], lvl: &Level, contacts: &mut Vec<Contact>) {
     for (a_i, a_rect) in group_a.iter().enumerate() {
-        for (b_rect, _) in lvl.tiles_within(*a_rect).filter(|(_r, td)| td.solid) {
+        for (_, b_rect, _) in lvl.tiles_within(*a_rect).filter(|(_, _r, td)| td.solid) {
             if let Some(overlap) = a_rect.overlap(b_rect) {
                 contacts.push(Contact {
                     displacement: overlap,
