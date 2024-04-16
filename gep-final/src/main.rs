@@ -312,14 +312,14 @@ impl Game {
             let pause1_pos = Transform {
                 w: (TILE_SZ as f32 * 2.5) as u16, 
                 h: (TILE_SZ as f32 * 2.5) as u16,
-                x: self.camera.screen_pos[0] + 2.5,
-                y: self.camera.screen_pos[1] + self.camera.screen_size[1]/2_f32, 
+                x: W as f32/2.0 - 2.0*TILE_SZ as f32,
+                y: H as f32/2.0, 
                 rot: 0.0,
             };
             let q_pos = Transform {
                 w: (TILE_SZ) as u16, 
                 h: (TILE_SZ) as u16,
-                x: self.camera.screen_pos[0] + 2.45,
+                x: W as f32/2.0 - 2.0*TILE_SZ as f32 + 0.1,
                 y: self.camera.screen_pos[1] + (self.camera.screen_size[1]/2_f32) + 0.5, 
                 rot: 0.0,
             };
@@ -388,8 +388,8 @@ impl Game {
         let heart_pos = Transform {
             w: TILE_SZ as u16, 
             h: TILE_SZ as u16,
-            x: self.camera.screen_pos[0] + 10_f32,
-            y: self.camera.screen_pos[1] + 6_f32,
+            x: 10.0,
+            y: 6.0,
             rot: 0.0,
         };
         for i in 0..self.health {
@@ -406,8 +406,8 @@ impl Game {
         let exp_pos = Transform {
             w: TILE_SZ as u16, 
             h: TILE_SZ as u16,
-            x: self.camera.screen_pos[0] + self.camera.screen_size[0] - 10_f32,
-            y: self.camera.screen_pos[1] + self.camera.screen_size[1] - 10_f32,
+            x: W as f32 - 10.0,
+            y: H as f32 - 10.0,
             rot: 0.0,
         };
         for i in 0..self.xp {
@@ -797,6 +797,7 @@ impl Game {
                     find_displacement(p_rect, enemy_rect[contact.b_index]);
                 removable.push(contact.b_index);
                 self.xp += 1; // this might be wrong as it gives xp when an enemy dies in a wall
+                dbg!(self.xp);
             }
             if contact.a_index == 0 {
                 if self.knockback_timer == 0.0 {
