@@ -562,9 +562,9 @@ impl Game {
                     region: SheetRegion::rect(679, 55, 16, 16).with_depth(0),
                     repeat: frenderer::nineslice::Repeat::Tile,
                 });
-                let pause_x = W as f32/2.0 - 3.0*TILE_SZ as f32; 
+                let pause_x = W as f32/2.0 - 4.0*TILE_SZ as f32; 
                 let pause_y = H as f32/2.0 - 3.0*TILE_SZ as f32; 
-            frend.draw_nineslice(1, &nine_tiled, pause_x, pause_y, 6.0*TILE_SZ as f32, 6.0*TILE_SZ as f32, 0);  
+            frend.draw_nineslice(1, &nine_tiled, pause_x, pause_y, 8.0*TILE_SZ as f32, 6.0*TILE_SZ as f32, 0);  
         }
         // done point: draw hearts
         // let heart_pos = Transform {
