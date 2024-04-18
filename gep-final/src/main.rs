@@ -46,13 +46,9 @@ const ENEMY: [SheetRegion; 4] = [
     SheetRegion::rect(533, 39, 16, 16),
     SheetRegion::rect(533 + 16 * 3, 39, 16, 16),
 ];
-const GREENUP: SheetRegion = SheetRegion::rect(525, 27, 8, 8);
 const HEART: SheetRegion = SheetRegion::rect(525, 35, 8, 8);
-const REDUP: SheetRegion = SheetRegion::rect(525, 43, 8, 8);
 const EXPERIENCE: SheetRegion = SheetRegion::rect(525, 50, 8, 8);
 
-const LETTERQ: SheetRegion = SheetRegion::rect(154, 90, 8, 8);
-const LETTERE: SheetRegion = SheetRegion::rect(46, 90, 8, 8);
 const ATK: SheetRegion = SheetRegion::rect(525, 19, 8, 8);
 const BLANK: SheetRegion = SheetRegion::rect(600, 600, 16, 16);
 
@@ -308,81 +304,6 @@ impl Game {
     }
     fn draw_hud(&self, frend: &mut Immediate) {
         // render an upgrade menu
-        if self.upgrade {
-            let pause1_pos = Transform {
-                w: (TILE_SZ as f32 * 2.5) as u16, 
-                h: (TILE_SZ as f32 * 2.5) as u16,
-                x: W as f32/2.0 - 2.0*TILE_SZ as f32,
-                y: H as f32/2.0, 
-                rot: 0.0,
-            };
-            let q_pos = Transform {
-                w: (TILE_SZ) as u16, 
-                h: (TILE_SZ) as u16,
-                x: W as f32/2.0 - 2.0*TILE_SZ as f32 + 0.1,
-                y: self.camera.screen_pos[1] + (self.camera.screen_size[1]/2_f32) + 0.5, 
-                rot: 0.0,
-            };
-
-            // sprite_posns[j] = Transform {
-            //     x: q_pos.x as f32 * (TILE_SZ*2) as f32,
-            //     ..q_pos
-            // };
-            // sprite_gfx[j] = LETTERQ.with_depth(0); // for some reason q isn't showing up even though e is
-            frend.draw_sprite(1, Transform {
-                x: q_pos.x * (TILE_SZ*2) as f32,
-                ..q_pos
-            }, LETTERQ.with_depth(0));
-
-            // sprite_posns[j+1] = Transform {
-            //     x: pause1_pos.x as f32 * (TILE_SZ*2) as f32,
-            //     ..pause1_pos
-            // };
-            // sprite_gfx[j+1] = GREENUP.with_depth(0);
-
-            frend.draw_sprite(1, Transform {
-                x: pause1_pos.x * (TILE_SZ*2) as f32,
-                ..pause1_pos
-            }, GREENUP.with_depth(0));
-
-            let pause2_pos = Transform {
-                w: (TILE_SZ as f32 * 2.5) as u16, 
-                h: (TILE_SZ as f32 * 2.5) as u16,
-                x: self.camera.screen_pos[0] + 4.5_f32,
-                y: self.camera.screen_pos[1] + self.camera.screen_size[1]/2_f32, 
-                rot: 0.0,
-            };
-            let e_pos = Transform {
-                w: (TILE_SZ) as u16, 
-                h: (TILE_SZ) as u16,
-                x: self.camera.screen_pos[0] + 4.45_f32,
-                y: self.camera.screen_pos[1] + (self.camera.screen_size[1]/2_f32) + 0.5, 
-                rot: 0.0,
-            };
-
-            // sprite_posns[j+2] = Transform {
-            //     x: e_pos.x as f32 * (TILE_SZ*2) as f32,
-            //     ..e_pos
-            // };
-            // sprite_gfx[j+2] = LETTERE.with_depth(0);
-            
-            frend.draw_sprite(1, Transform {
-                x: e_pos.x * (TILE_SZ*2) as f32,
-                ..e_pos
-            }, LETTERE.with_depth(0));
-
-            // sprite_posns[j+3] = Transform {
-            //     x: pause2_pos.x as f32 * (TILE_SZ*2) as f32,
-            //     ..pause2_pos
-            // };
-            // sprite_gfx[j+3] = REDUP.with_depth(0);
-
-            frend.draw_sprite(1, Transform {
-                    x: pause2_pos.x * (TILE_SZ*2) as f32,
-                    ..pause2_pos
-                }, REDUP.with_depth(0));
-            
-        }
         
         // draw UI with health and experience
         let heart_pos = Transform {
@@ -401,7 +322,7 @@ impl Game {
             frend.draw_sprite(1, Transform {
                 x: heart_pos.x + i as f32 * TILE_SZ as f32,
                 ..heart_pos
-            }, HEART.with_depth(0));
+            }, HEART.with_depth(1));
         }
         let exp_pos = Transform {
             w: TILE_SZ as u16, 
@@ -421,7 +342,7 @@ impl Game {
             frend.draw_sprite(1, Transform {
                 x: exp_pos.x - i as f32 * 12_f32,
                 ..exp_pos
-            }, EXPERIENCE.with_depth(0));
+            }, EXPERIENCE.with_depth(1));
         }
         
         // render a game end menu
@@ -457,7 +378,7 @@ impl Game {
                     x: enemy.0.pos.x,
                     y: enemy.0.pos.y,
                     rot: 0.0,
-                }, ENEMY[enemy.0.dir as usize].with_depth(1));
+                }, ENEMY[enemy.0.dir as usize].with_depth(3));
             }
             else {
                 frend.draw_sprite(0, Transform::ZERO, SheetRegion::ZERO);
@@ -466,7 +387,6 @@ impl Game {
 
         // draw pause menu & HUD
         self.draw_hud(frend);
-        
         
         if self.knockback_timer > 0.0 && self.knockback_timer % 0.5 < 0.25 {
             frend.draw_sprite(0, Transform {
@@ -483,7 +403,7 @@ impl Game {
                 x: self.player.pos.x,
                 y: self.player.pos.y,
                 rot: 0.0,
-            }, PLAYER[self.player.dir as usize].with_depth(1));
+            }, PLAYER[self.player.dir as usize].with_depth(2));
         }
         if self.game_end { // player disappears when game ends (no more health)
             frend.draw_sprite(0, Transform {
@@ -523,7 +443,7 @@ impl Game {
                 x: self.player.pos.x + delta.x,
                 y: self.player.pos.y + delta.y,
                 rot: 0.0,
-            }, BLANK.with_depth(0));
+            }, BLANK.with_depth(2));
 
             frend.draw_sprite(0, Transform {
                 w: (self.attack_range as usize * TILE_SZ) as u16,
@@ -531,7 +451,7 @@ impl Game {
                 x: self.player.pos.x,
                 y: self.player.pos.y,
                 rot: 0.0,
-            }, ATK.with_depth(0));    
+            }, ATK.with_depth(2));    
             
         }
         // sprite_gfx[1] = BLANK.with_depth(0); //was player_atk[dir]
@@ -542,29 +462,52 @@ impl Game {
                 frenderer::nineslice::CornerSlice {
                     w: 16.0,
                     h: 16.0,
-                    region: SheetRegion::rect(628, 55, 16, 16).with_depth(0),
+                    region: SheetRegion::rect(628, 55, 16, 16).with_depth(1),
                 }, 
                 frenderer::nineslice::Slice {
                     w: 16.0,
                     h: 16.0,
-                    region: SheetRegion::rect(662, 55, 16, 16).with_depth(0),
+                    region: SheetRegion::rect(662, 55, 16, 16).with_depth(1),
                     repeat: frenderer::nineslice::Repeat::Tile,
                 }, 
                 frenderer::nineslice::Slice {
                     w: 16.0,
                     h: 16.0,
-                    region: SheetRegion::rect(645, 55, 16, 16).with_depth(0),
+                    region: SheetRegion::rect(645, 55, 16, 16).with_depth(1),
                     repeat: frenderer::nineslice::Repeat::Tile,
                 }, 
                 frenderer::nineslice::Slice {
                     w: 16.0,
                     h: 16.0,
-                    region: SheetRegion::rect(679, 55, 16, 16).with_depth(0),
+                    region: SheetRegion::rect(679, 55, 16, 16).with_depth(1),
                     repeat: frenderer::nineslice::Repeat::Tile,
                 });
                 let pause_x = W as f32/2.0 - 4.0*TILE_SZ as f32; 
                 let pause_y = H as f32/2.0 - 3.0*TILE_SZ as f32; 
             frend.draw_nineslice(1, &nine_tiled, pause_x, pause_y, 8.0*TILE_SZ as f32, 6.0*TILE_SZ as f32, 0);  
+
+            let font = frenderer::bitfont::BitFont::with_sheet_region(
+                ' '..='ÿ', 
+                SheetRegion::new(0, 0, 143, 0, 288, 70).with_depth(0), 
+                (8) as u16, 
+                (8) as u16, 
+                (1) as u16, 
+                (2) as u16);
+            
+            if self.upgrade{
+                let mut text = "upgrades time";
+                frend.draw_text(1, &font, text, [(W/2) as f32 - 3.5*TILE_SZ as f32, (H/2) as f32 + TILE_SZ as f32], 0, (TILE_SZ/2) as f32);
+                text = ":Q"; //TODO: update the positions of these and add heart for health upgrade and sword for attack radius upgrade
+                frend.draw_text(1, &font, text, [(W/2) as f32 - 3.5*TILE_SZ as f32, (H/2) as f32 + TILE_SZ as f32], 0, (TILE_SZ/2) as f32);
+                text = ":E";
+                frend.draw_text(1, &font, text, [(W/2) as f32 - 3.5*TILE_SZ as f32, (H/2) as f32 + TILE_SZ as f32], 0, (TILE_SZ/2) as f32);
+            } else {
+                let mut text = "game paused!";
+                frend.draw_text(1, &font, text, [(W/2) as f32 - 3.0*TILE_SZ as f32, (H/2) as f32 + TILE_SZ as f32], 0, (TILE_SZ/2) as f32);
+                text = "unpause: Esc";
+                frend.draw_text(1, &font, text, [(W/2) as f32 - 3.25*TILE_SZ as f32, (H/2) as f32 - TILE_SZ as f32], 0, (TILE_SZ/2) as f32);
+
+            }
         }
         // done point: draw hearts
         // let heart_pos = Transform {
@@ -799,7 +742,7 @@ impl Game {
                     find_displacement(p_rect, enemy_rect[contact.b_index]);
                 removable.push(contact.b_index);
                 self.xp += 1; // this might be wrong as it gives xp when an enemy dies in a wall
-                dbg!(self.xp);
+                // dbg!(self.xp);
             }
             if contact.a_index == 0 {
                 if self.knockback_timer == 0.0 {
