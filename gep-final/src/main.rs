@@ -538,31 +538,33 @@ impl Game {
         // sprite_gfx[self.health as usize + 2] = ATK.with_depth(0); // commenting this out made menu show up consistently
 
         if self.paused {
-            let _nine_tiled = frenderer::nineslice::NineSlice::with_corner_edge_center(
+            let nine_tiled = frenderer::nineslice::NineSlice::with_corner_edge_center(
                 frenderer::nineslice::CornerSlice {
-                    w: 8.0,
-                    h: 8.0,
-                    region: SheetRegion::rect(0,0,8,8),
-                }, 
-                frenderer::nineslice::Slice {
-                    w: 2.0,
+                    w: 16.0,
                     h: 16.0,
-                    region: SheetRegion::rect(0,0,2,16).with_depth(1),
-                    repeat: frenderer::nineslice::Repeat::Tile,
+                    region: SheetRegion::rect(628, 55, 16, 16),
                 }, 
                 frenderer::nineslice::Slice {
                     w: 16.0,
-                    h: 2.0,
-                    region: SheetRegion::rect(0,0,16,2).with_depth(1),
+                    h: 16.0,
+                    region: SheetRegion::rect(662, 55, 16, 16).with_depth(1),
                     repeat: frenderer::nineslice::Repeat::Tile,
                 }, 
                 frenderer::nineslice::Slice {
                     w: 16.0,
                     h: 16.0,
-                    region: SheetRegion::rect(0,0,2,16).with_depth(2),
+                    region: SheetRegion::rect(645, 55, 16, 16).with_depth(1),
+                    repeat: frenderer::nineslice::Repeat::Tile,
+                }, 
+                frenderer::nineslice::Slice {
+                    w: 16.0,
+                    h: 16.0,
+                    region: SheetRegion::rect(679, 55, 16, 16).with_depth(2),
                     repeat: frenderer::nineslice::Repeat::Tile,
                 });
-            // let spirtesForPause = nine_tiled.draw(sprite_posns, sprite_gfx, 32.0, 32.0, TILE_SZ as f32*6.0, TILE_SZ as f32*6.0, 0);
+                let pause_x = W as f32/2.0 - 3.0*TILE_SZ as f32; 
+                let pause_y = H as f32/2.0 - 3.0*TILE_SZ as f32; 
+            frend.draw_nineslice(1, &nine_tiled, pause_x, pause_y, 6.0*TILE_SZ as f32, 6.0*TILE_SZ as f32, 0);  
         }
         // done point: draw hearts
         // let heart_pos = Transform {
