@@ -457,7 +457,7 @@ impl Game {
                     x: enemy.0.pos.x,
                     y: enemy.0.pos.y,
                     rot: 0.0,
-                }, ENEMY[enemy.0.dir as usize]);
+                }, ENEMY[enemy.0.dir as usize].with_depth(1));
             }
             else {
                 frend.draw_sprite(0, Transform::ZERO, SheetRegion::ZERO);
@@ -542,24 +542,24 @@ impl Game {
                 frenderer::nineslice::CornerSlice {
                     w: 16.0,
                     h: 16.0,
-                    region: SheetRegion::rect(628, 55, 16, 16),
+                    region: SheetRegion::rect(628, 55, 16, 16).with_depth(0),
                 }, 
                 frenderer::nineslice::Slice {
                     w: 16.0,
                     h: 16.0,
-                    region: SheetRegion::rect(662, 55, 16, 16).with_depth(1),
+                    region: SheetRegion::rect(662, 55, 16, 16).with_depth(0),
                     repeat: frenderer::nineslice::Repeat::Tile,
                 }, 
                 frenderer::nineslice::Slice {
                     w: 16.0,
                     h: 16.0,
-                    region: SheetRegion::rect(645, 55, 16, 16).with_depth(1),
+                    region: SheetRegion::rect(645, 55, 16, 16).with_depth(0),
                     repeat: frenderer::nineslice::Repeat::Tile,
                 }, 
                 frenderer::nineslice::Slice {
                     w: 16.0,
                     h: 16.0,
-                    region: SheetRegion::rect(679, 55, 16, 16).with_depth(2),
+                    region: SheetRegion::rect(679, 55, 16, 16).with_depth(0),
                     repeat: frenderer::nineslice::Repeat::Tile,
                 });
                 let pause_x = W as f32/2.0 - 3.0*TILE_SZ as f32; 
