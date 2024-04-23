@@ -223,15 +223,17 @@ impl Game {
         // tile sprite group: 0
         renderer.sprite_group_add(
             &tile_tex,
-            vec![Transform::ZERO; sprite_estimate],
-            vec![SheetRegion::ZERO; sprite_estimate],
+            sprite_estimate,
+            //vec![Transform::ZERO; sprite_estimate],
+            //vec![SheetRegion::ZERO; sprite_estimate],
             camera,
         );
         // HUD sprite group: 1
         renderer.sprite_group_add(
             &tile_tex,
-            vec![Transform::ZERO; sprite_estimate],
-            vec![SheetRegion::ZERO; sprite_estimate],
+            sprite_estimate,
+            //vec![Transform::ZERO; sprite_estimate],
+            //svec![SheetRegion::ZERO; sprite_estimate],
             camera,
         );
         let player_start = *levels[current_level]
